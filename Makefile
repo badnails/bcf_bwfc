@@ -124,7 +124,7 @@ test-idempotency:
 test-timeout:
 	@echo "Testing timeout handling..."
 	@echo "\n=== Enable Gremlin (every 3rd request delayed 5s) ==="
-	@curl -s -X POST http://localhost:3001/api/gremlin/enable | jq .
+	@curl -s -X POST http://localhost:3001/internal/gremlin/enable | jq .
 	@echo "\n=== Making 3 requests to trigger timeout ==="
 	@for i in 1 2 3; do \
 		echo "\nRequest $$i:"; \
@@ -134,14 +134,14 @@ test-timeout:
 		sleep 1; \
 	done
 	@echo "\n=== Disable Gremlin ==="
-	@curl -s -X POST http://localhost:3001/api/gremlin/disable | jq .
+	@curl -s -X POST http://localhost:3001/internal/gremlin/disable | jq .
 
 test-gremlin:
 	@echo "Testing gremlin chaos injection..."
 	@echo "\n=== Gremlin Status ==="
-	@curl -s http://localhost:3001/api/gremlin/status | jq .
+	@curl -s http://localhost:3001/internal/gremlin/status | jq .
 	@echo "\n=== Enable Gremlin ==="
-	@curl -s -X POST http://localhost:3001/api/gremlin/enable | jq .
+	@curl -s -X POST http://localhost:3001/internal/gremlin/enable | jq .
 	@echo "\n=== Make requests to observe latency pattern ==="
 	@for i in 1 2 3 4 5; do \
 		echo "\nRequest $$i:"; \
@@ -154,7 +154,7 @@ test-gremlin:
 		echo "Time taken: $${DIFF}s"; \
 	done
 	@echo "\n=== Disable Gremlin ==="
-	@curl -s -X POST http://localhost:3001/api/gremlin/disable | jq .
+	@curl -s -X POST http://localhost:3001/internal/gremlin/disable | jq .
 
 # ==============================================================================
 # UTILITY COMMANDS

@@ -3,7 +3,7 @@ FROM oven/bun:1 AS base
 WORKDIR /app
 
 # Install dependencies
-COPY package.json ./
+COPY order-service/package.json ./
 RUN bun install
 
 # Development stage
@@ -17,7 +17,10 @@ FROM base AS production
 WORKDIR /app
 
 # Copy source code
-COPY src ./src
+COPY order-service/src ./src
+
+# Copy shared module (metrics) - placed as sibling for ../../shared imports
+COPY shared /shared
 
 # Expose port
 EXPOSE 3000

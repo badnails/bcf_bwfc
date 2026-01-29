@@ -1,0 +1,177 @@
+# Prometheus Alert Rules for Valerix E-commerce Platform
+
+groups:
+  # ============================================================================
+  # Service Health Alerts
+  # ============================================================================
+  - name: valerix_service_health
+    interval: 10s
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"order-service|inventory-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 30 seconds."
+          service: "{{ $labels.job }}"
+          
+      - alert: ServiceRestartingFrequently
+        expr: changes(up{job=~"order-service|inventory-service"}[10m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          category: stability
+        annotations:
+          summary: "Service {{ $labels.job }} is restarting frequently"
+          description: "{{ $labels.job }} has restarted {{ $value }} times in the last 10 minutes."
+
+  # ============================================================================
+  # SLA Monitoring - CRITICAL for decoded.md requirement
+  # "If the average response time of the Order Service exceeds 1 second 
+  #  over a rolling 30 second window, a component must change from green to red"
+  # ============================================================================
+  - name: valerix_sla_monitoring
+    interval: 5s
+    rules:
+      # Primary SLA breach alert - Order Service response time > 1s over 30s window
+      - alert: OrderServiceSLABreach
+        expr: http_response_time_avg_30s{service="order-service"} > 1000
+        for: 0s
+        labels:
+          severity: critical
+          category: sla
+          sla_status: red
+        annotations:
+          summary: "Order Service SLA Breach - Response Time > 1s"
+          description: "Average response time is {{ $value | humanize }}ms (threshold: 1000ms) over the last 30 seconds."
+          dashboard_status: "RED"
+
+      # High latency warning (approaching SLA breach)
+      - alert: OrderServiceHighLatency
+        expr: http_response_time_avg_30s{service="order-service"} > 500 and http_response_time_avg_30s{service="order-service"} <= 1000
+        for: 30s
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Order Service latency approaching SLA threshold"
+          description: "Average response time is {{ $value | humanize }}ms (warning at 500ms, critical at 1000ms)"
+
+  # ============================================================================
+  # Error Rate Monitoring
+  # ============================================================================
+  - name: valerix_error_monitoring
+    interval: 15s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{service=~"order-service|inventory-service",status_code=~"5.."}[5m])) 
+            / 
+            sum(rate(http_requests_total{service=~"order-service|inventory-service"}[5m]))
+          ) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+          category: errors
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanize }}% (threshold: 5%)"
+          
+      - alert: CriticalErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{service=~"order-service|inventory-service",status_code=~"5.."}[5m])) 
+            / 
+            sum(rate(http_requests_total{service=~"order-service|inventory-service"}[5m]))
+          ) * 100 > 20
+        for: 1m
+        labels:
+          severity: critical
+          category: errors
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value | humanize }}% (threshold: 20%)"
+
+      # Timeout errors specifically
+      - alert: HighTimeoutRate
+        expr: rate(http_timeout_errors_total{service="order-service"}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: timeouts
+        annotations:
+          summary: "High timeout rate on Order Service"
+          description: "Timeout rate is {{ $value | humanize }} per second. Inventory service may be experiencing issues."
+
+  # ============================================================================
+  # Order Processing Monitoring
+  # ============================================================================
+  - name: valerix_order_monitoring
+    interval: 15s
+    rules:
+      - alert: HighOrderFailureRate
+        expr: |
+          (
+            sum(rate(orders_total{status="failed"}[5m])) 
+            / 
+            sum(rate(orders_total[5m]))
+          ) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: orders
+        annotations:
+          summary: "High order failure rate"
+          description: "{{ $value | humanize }}% of orders are failing (threshold: 10%)"
+
+      - alert: OrderTimeoutsSpike
+        expr: rate(orders_timeout_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: orders
+        annotations:
+          summary: "Order timeouts are spiking"
+          description: "Timeout rate: {{ $value | humanize }} per second. Check Inventory Service health."
+
+  # ============================================================================
+  # Latency Percentile Monitoring
+  # ============================================================================
+  - name: valerix_latency_percentiles
+    interval: 15s
+    rules:
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99, 
+            sum by (service, le) (
+              rate(http_request_duration_seconds_bucket{service=~"order-service|inventory-service"}[5m])
+            )
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High P99 latency on {{ $labels.service }}"
+          description: "P99 latency is {{ $value | humanize }}s (threshold: 2s)"
+          service: "{{ $labels.service }}"
+
+      - alert: CriticalP99Latency
+        expr: |
+          histogram_quantile(0.99, 
+            sum by (service, le) (
+              rate(http_request_duration_seconds_bucket{service=~"order-service|inventory-service"}[5m])
+            )
+          ) > 5
+        for: 2m
+        labels:
+          severity: critical
+          category: performance
+        annotations:
+          summary: "Critical P99 latency on {{ $labels.service }}"
+          description: "P99 latency is {{ $value | humanize }}s (threshold: 5s)"
+          service: "{{ $labels.service }}"

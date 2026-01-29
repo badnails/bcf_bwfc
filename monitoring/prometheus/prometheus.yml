@@ -1,0 +1,35 @@
+# Prometheus configuration for Valerix E-commerce Microservices
+
+global:
+  scrape_interval: 5s      # More frequent for 30s rolling window accuracy
+  evaluation_interval: 5s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# Load alert rules
+rule_files:
+  - '/etc/prometheus/alerts.yml'
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Order Service
+  - job_name: 'order-service'
+    static_configs:
+      - targets: ['order-service:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Inventory Service
+  - job_name: 'inventory-service'
+    static_configs:
+      - targets: ['inventory-service:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 5s

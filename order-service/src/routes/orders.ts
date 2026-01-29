@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { sql } from '../db';
 import { generateOrderId } from '../helpers/order-helpers';
 import { callInventoryDeduct } from '../helpers/inventory-client';
+import { recordOrderResult } from '../../../shared/metrics';
 
 const orders = new Hono();
 
@@ -54,6 +55,18 @@ orders.post('/', async (c) => {
         VALUES (${orderId}, ${product_id}, ${quantity}, 'confirmed', ${requestId}, ${correlationId})
       `;
 
+      // Record metrics for Prometheus
+      recordOrderResult('confirmed', false);
+
+      // Update order_stats table for historical aggregation
+      await sql`
+        INSERT INTO order_stats (minute_bucket, total_orders, confirmed_orders)
+        VALUES (date_trunc('minute', CURRENT_TIMESTAMP), 1, 1)
+        ON CONFLICT (minute_bucket) DO UPDATE
+        SET total_orders = order_stats.total_orders + 1,
+            confirmed_orders = order_stats.confirmed_orders + 1
+      `;
+
       return c.json({
         order_id: orderId,
         status: 'confirmed',
@@ -64,7 +77,8 @@ orders.post('/', async (c) => {
       });
     } else {
       // Order failed
-      const errorMessage = inventoryResult.error === 'INVENTORY_SERVICE_TIMEOUT' 
+      const isTimeout = inventoryResult.error === 'INVENTORY_SERVICE_TIMEOUT';
+      const errorMessage = isTimeout 
         ? 'Could not confirm inventory availability. Retry with the order ID.'
         : typeof inventoryResult.error === 'string' 
           ? inventoryResult.error 
@@ -75,7 +89,20 @@ orders.post('/', async (c) => {
         VALUES (${orderId}, ${product_id}, ${quantity}, 'failed', ${errorMessage}, ${requestId}, ${correlationId})
       `;
 
-      if (inventoryResult.error === 'INVENTORY_SERVICE_TIMEOUT') {
+      // Record metrics for Prometheus
+      recordOrderResult('failed', isTimeout);
+
+      // Update order_stats table for historical aggregation
+      await sql`
+        INSERT INTO order_stats (minute_bucket, total_orders, failed_orders, timeout_errors)
+        VALUES (date_trunc('minute', CURRENT_TIMESTAMP), 1, 1, ${isTimeout ? 1 : 0})
+        ON CONFLICT (minute_bucket) DO UPDATE
+        SET total_orders = order_stats.total_orders + 1,
+            failed_orders = order_stats.failed_orders + 1,
+            timeout_errors = order_stats.timeout_errors + ${isTimeout ? 1 : 0}
+      `;
+
+      if (isTimeout) {
         return c.json({
           order_id: orderId,
           status: 'failed',

@@ -1,0 +1,51 @@
+{{ define "__alertmanager" }}Alertmanager{{ end }}
+{{ define "__alertmanagerURL" }}{{ .ExternalURL }}/#/alerts?receiver={{ .Receiver }}{{ end }}
+
+{{ define "__subject" }}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.SortedPairs.Values | join " " }} {{ if gt (len .CommonLabels) (len .GroupLabels) }}({{ with .CommonLabels.Remove .GroupLabels.Names }}{{ .Values | join " " }}{{ end }}){{ end }}{{ end }}
+
+{{ define "__description" }}{{ end }}
+
+{{ define "__text_alert_list" }}{{ range . }}
+**Alert:** {{ .Labels.alertname }}
+**Severity:** {{ .Labels.severity }}
+**Description:** {{ .Annotations.description }}
+{{ if .Labels.service }}**Service:** {{ .Labels.service }}{{ end }}
+**Started:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+{{ if .EndsAt }}**Ended:** {{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}{{ end }}
+{{ end }}{{ end }}
+
+{{ define "slack.default.title" }}{{ template "__subject" . }}{{ end }}
+{{ define "slack.default.text" }}{{ template "__text_alert_list" .Alerts.Firing }}{{ end }}
+
+{{ define "email.default.subject" }}{{ template "__subject" . }}{{ end }}
+{{ define "email.default.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: Arial, sans-serif; }
+  .alert { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px; }
+  .critical { background-color: #ffebee; border-left: 5px solid #f44336; }
+  .warning { background-color: #fff3e0; border-left: 5px solid #ff9800; }
+  .info { background-color: #e3f2fd; border-left: 5px solid #2196f3; }
+  .resolved { background-color: #e8f5e9; border-left: 5px solid #4caf50; }
+  h2 { color: #333; }
+  .label { font-weight: bold; }
+</style>
+</head>
+<body>
+<h2>{{ if eq .Status "firing" }}🚨 Alerts Firing{{ else }}✅ Alerts Resolved{{ end }}</h2>
+{{ range .Alerts }}
+<div class="alert {{ .Labels.severity }}">
+  <p><span class="label">Alert:</span> {{ .Labels.alertname }}</p>
+  <p><span class="label">Severity:</span> {{ .Labels.severity }}</p>
+  <p><span class="label">Description:</span> {{ .Annotations.description }}</p>
+  {{ if .Labels.service }}<p><span class="label">Service:</span> {{ .Labels.service }}</p>{{ end }}
+  <p><span class="label">Started:</span> {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}</p>
+  {{ if .EndsAt }}<p><span class="label">Ended:</span> {{ .EndsAt.Format "2006-01-02 15:04:05 MST" }}</p>{{ end }}
+</div>
+{{ end }}
+<p><a href="{{ .ExternalURL }}">View in Alertmanager</a></p>
+</body>
+</html>
+{{ end }}

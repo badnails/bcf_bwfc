@@ -1,0 +1,14 @@
+# Grafana Dashboards Provisioning
+apiVersion: 1
+
+providers:
+  - name: 'Valerix Dashboards'
+    orgId: 1
+    folder: 'Valerix'
+    folderUid: 'valerix'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json

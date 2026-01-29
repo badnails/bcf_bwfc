@@ -1,0 +1,108 @@
+# Alertmanager Configuration
+
+global:
+  resolve_timeout: 5m
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# The root route with all parameters, which are inherited by the child routes
+route:
+  receiver: 'default-receiver'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 5s
+      repeat_interval: 1h
+      
+    # Warning alerts - grouped notification
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      repeat_interval: 4h
+      
+    # Info alerts - less urgent
+    - match:
+        severity: info
+      receiver: 'info-alerts'
+      group_wait: 1m
+      repeat_interval: 12h
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Suppress warnings if critical alert is firing for the same service
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service']
+    
+  # Suppress high latency alerts if service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match:
+      category: 'performance'
+    equal: ['service']
+
+# Receivers - configure your notification channels here
+receivers:
+  # Default receiver (logs only)
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://alertmanager:9093/api/v1/alerts'
+        send_resolved: true
+
+  # Critical alerts - multiple channels
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://alertmanager:9093/api/v1/alerts'
+        send_resolved: true
+    # Uncomment and configure for email notifications
+    # email_configs:
+    #   - to: 'ops-team@example.com'
+    #     from: 'alertmanager@bwfn.local'
+    #     smarthost: 'smtp.gmail.com:587'
+    #     auth_username: 'your-email@gmail.com'
+    #     auth_password: 'your-app-password'
+    #     headers:
+    #       Subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+    
+    # Uncomment for Slack notifications
+    # slack_configs:
+    #   - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+    #     channel: '#alerts-critical'
+    #     title: '🚨 Critical Alert: {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+    
+    # Uncomment for Microsoft Teams
+    # webhook_configs:
+    #   - url: 'YOUR_TEAMS_WEBHOOK_URL'
+    #     send_resolved: true
+
+  # Warning alerts
+  - name: 'warning-alerts'
+    webhook_configs:
+      - url: 'http://alertmanager:9093/api/v1/alerts'
+        send_resolved: true
+    # Uncomment for Slack notifications
+    # slack_configs:
+    #   - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+    #     channel: '#alerts-warnings'
+    #     title: '⚠️ Warning: {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    #     send_resolved: true
+
+  # Info alerts (low priority)
+  - name: 'info-alerts'
+    webhook_configs:
+      - url: 'http://alertmanager:9093/api/v1/alerts'
+        send_resolved: true
