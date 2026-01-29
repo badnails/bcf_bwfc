@@ -3,7 +3,6 @@
 -- Orders Table
 CREATE TABLE IF NOT EXISTS orders (
     order_id VARCHAR(64) PRIMARY KEY,
-    user_id VARCHAR(64) NOT NULL,
     product_id VARCHAR(64) NOT NULL,
     quantity INT NOT NULL CHECK (quantity > 0),
     status VARCHAR(20) NOT NULL CHECK (status IN ('confirmed', 'failed')),
@@ -19,7 +18,6 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_user_id ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_product_id ON orders(product_id);
 CREATE INDEX IF NOT EXISTS idx_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_created_at ON orders(created_at);

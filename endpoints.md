@@ -9,7 +9,6 @@ Place a new order. Immediately deducts inventory upon confirmation.
 - **Request Body:**
   ```json
   {
-    "user_id": "string",
     "product_id": "string",
     "quantity": number,
     "idempotency_key": "string|null"
@@ -44,9 +43,8 @@ Place a new order. Immediately deducts inventory upon confirmation.
   - `500 Internal Server Error` - Server error (client should retry with returned `order_id` as `idempotency_key`)
 
 #### **GET /api/orders**
-Get user's order history
+Get all order history
 - **Query Parameters:**
-  - `user_id` (required): string
   - `status` (optional): confirmed|failed|all (default: all)
   - `limit` (optional): number (default: 50)
   - `offset` (optional): number (default: 0)

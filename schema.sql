@@ -11,7 +11,6 @@
 -- order_id serves as idempotency key
 CREATE TABLE orders (
     order_id VARCHAR(64) PRIMARY KEY,           -- UUID format (e.g., "ORD-uuid")
-    user_id VARCHAR(64) NOT NULL,                -- Reference to user (from Auth Service)
     product_id VARCHAR(64) NOT NULL,             -- Reference to product
     quantity INT NOT NULL CHECK (quantity > 0),
     status VARCHAR(20) NOT NULL CHECK (status IN ('confirmed', 'failed')),
@@ -26,7 +25,6 @@ CREATE TABLE orders (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
     -- Indexes for common queries
-    INDEX idx_user_id (user_id),
     INDEX idx_product_id (product_id),
     INDEX idx_status (status),
     INDEX idx_created_at (created_at),
