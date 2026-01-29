@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS orders (
     order_id VARCHAR(64) PRIMARY KEY,
     product_id VARCHAR(64) NOT NULL,
     quantity INT NOT NULL CHECK (quantity > 0),
-    status VARCHAR(20) NOT NULL CHECK (status IN ('confirmed', 'failed')),
+    status VARCHAR(20) NOT NULL CHECK (status IN ('confirmed', 'failed', 'undecided')),
     error_message TEXT,
     
     -- Request tracing

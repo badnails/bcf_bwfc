@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { sql } from '../db';
 import { generateOrderId } from '../helpers/order-helpers';
-import { callInventoryDeduct } from '../helpers/inventory-client';
+import { callInventoryDeduct, verifyInventoryDeduction } from '../helpers/inventory-client';
 
 const orders = new Hono();
 
@@ -27,6 +27,57 @@ orders.post('/', async (c) => {
 
       if (existingOrder.length > 0) {
         const order = existingOrder[0];
+        
+        // If status is undecided, verify with inventory service
+        if (order.status === 'undecided') {
+          console.log(`Verifying undecided order ${order.order_id} with inventory service`);
+          
+          const verifyResult = await verifyInventoryDeduction(
+            order.order_id,
+            order.product_id,
+            order.quantity
+          );
+
+          if (verifyResult.success) {
+            // Inventory was deducted, update order to confirmed
+            await sql`
+              UPDATE orders
+              SET status = 'confirmed', error_message = NULL
+              WHERE order_id = ${order.order_id}
+            `;
+            
+            return c.json({
+              order_id: order.order_id,
+              status: 'confirmed',
+              product_id: order.product_id,
+              quantity: order.quantity,
+              message: 'Order placed and fulfilled',
+              timestamp: order.created_at,
+            });
+          } else {
+            // Inventory was not deducted, update order to failed
+            const errorMessage = typeof verifyResult.error === 'string'
+              ? verifyResult.error
+              : verifyResult.error?.message || 'Inventory deduction failed';
+            
+            await sql`
+              UPDATE orders
+              SET status = 'failed', error_message = ${errorMessage}
+              WHERE order_id = ${order.order_id}
+            `;
+            
+            return c.json({
+              order_id: order.order_id,
+              status: 'failed',
+              product_id: order.product_id,
+              quantity: order.quantity,
+              message: errorMessage,
+              timestamp: order.created_at,
+            });
+          }
+        }
+        
+        // Return existing order (confirmed or failed)
         return c.json({
           order_id: order.order_id,
           status: order.status,
@@ -63,22 +114,19 @@ orders.post('/', async (c) => {
         timestamp: new Date().toISOString(),
       });
     } else {
-      // Order failed
-      const errorMessage = inventoryResult.error === 'INVENTORY_SERVICE_TIMEOUT' 
-        ? 'Could not confirm inventory availability. Retry with the order ID.'
-        : typeof inventoryResult.error === 'string' 
-          ? inventoryResult.error 
-          : inventoryResult.error?.message || 'Insufficient inventory';
-
-      await sql`
-        INSERT INTO orders (order_id, product_id, quantity, status, error_message, request_id, correlation_id)
-        VALUES (${orderId}, ${product_id}, ${quantity}, 'failed', ${errorMessage}, ${requestId}, ${correlationId})
-      `;
-
+      // Handle timeout vs actual failure
       if (inventoryResult.error === 'INVENTORY_SERVICE_TIMEOUT') {
+        // Set status as undecided since inventory may have been deducted
+        const errorMessage = 'Could not confirm inventory availability. Retry with the order ID.';
+        
+        await sql`
+          INSERT INTO orders (order_id, product_id, quantity, status, error_message, request_id, correlation_id)
+          VALUES (${orderId}, ${product_id}, ${quantity}, 'undecided', ${errorMessage}, ${requestId}, ${correlationId})
+        `;
+
         return c.json({
           order_id: orderId,
-          status: 'failed',
+          status: 'undecided',
           error: {
             code: 'INVENTORY_SERVICE_TIMEOUT',
             message: errorMessage,
@@ -86,6 +134,16 @@ orders.post('/', async (c) => {
           },
         }, 503);
       }
+      
+      // Actual failure (insufficient stock, etc.)
+      const errorMessage = typeof inventoryResult.error === 'string' 
+        ? inventoryResult.error 
+        : inventoryResult.error?.message || 'Insufficient inventory';
+
+      await sql`
+        INSERT INTO orders (order_id, product_id, quantity, status, error_message, request_id, correlation_id)
+        VALUES (${orderId}, ${product_id}, ${quantity}, 'failed', ${errorMessage}, ${requestId}, ${correlationId})
+      `;
 
       return c.json({
         order_id: orderId,

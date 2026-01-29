@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Valerix E-Commerce Platform</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f8fc;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+    
+    /* Header */
+    header {
+      background: #1e3a5f;
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    .status-bar {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.85rem;
+    }
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6b7280;
+    }
+    .status-dot.healthy { background: #22c55e; }
+    .status-dot.unhealthy { background: #ef4444; }
+    
+    /* Main Layout */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 2rem;
+    }
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    
+    /* Cards */
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    .card-header {
+      background: #1e3a5f;
+      color: white;
+      padding: 0.75rem 1rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-body { padding: 1rem; }
+    
+    /* Product Grid */
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+    .product-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .product-card:hover {
+      border-color: #1e3a5f;
+      box-shadow: 0 2px 8px rgba(30,58,95,0.15);
+    }
+    .product-card.selected {
+      border-color: #1e3a5f;
+      background: #f0f5ff;
+    }
+    .product-name {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #1e3a5f;
+      font-size: 0.9rem;
+    }
+    .product-id {
+      font-size: 0.7rem;
+      color: #6b7280;
+      margin-bottom: 0.5rem;
+    }
+    .product-stock {
+      font-size: 0.85rem;
+      color: #059669;
+      font-weight: 500;
+    }
+    .product-stock.low { color: #dc2626; }
+    
+    /* Orders Table */
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .orders-table th {
+      text-align: left;
+      padding: 0.6rem;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      font-weight: 600;
+      color: #374151;
+    }
+    .orders-table td {
+      padding: 0.6rem;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .orders-table tr:hover {
+      background: #f9fafb;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .status-badge.confirmed {
+      background: #ecfdf5;
+      color: #047857;
+    }
+    .status-badge.failed {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+    .no-orders {
+      text-align: center;
+      padding: 2rem;
+      color: #6b7280;
+    }
+    
+    /* Order Form */
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 0.4rem;
+      color: #374151;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 0.95rem;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: #1e3a5f;
+    }
+    
+    /* Buttons */
+    .btn {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: #1e3a5f;
+      color: white;
+      width: 100%;
+    }
+    .btn-primary:hover { background: #2d4a6f; }
+    .btn-primary:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+      border: 1px solid #d1d5db;
+    }
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+    .btn-warning {
+      background: #f59e0b;
+      color: white;
+    }
+    .btn-warning:hover {
+      background: #d97706;
+    }
+    .btn-new-order {
+      padding: 1rem 1.5rem;
+      font-size: 1rem;
+    }
+    
+    /* Action Buttons Row */
+    .action-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .action-row .btn {
+      flex: 1;
+    }
+    
+    /* Gremlin Toggle */
+    .gremlin-section {
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid #e5e7eb;
+    }
+    .gremlin-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .gremlin-info {
+      font-size: 0.85rem;
+    }
+    .gremlin-info strong { color: #1e3a5f; }
+    .gremlin-info small {
+      display: block;
+      color: #6b7280;
+      margin-top: 0.2rem;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 26px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: #d1d5db;
+      border-radius: 26px;
+      transition: 0.2s;
+    }
+    .toggle-slider:before {
+      content: "";
+      position: absolute;
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: #dc2626;
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(22px);
+    }
+    
+    /* Result Message */
+    .result {
+      margin-top: 1rem;
+      padding: 0.8rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .result.show { display: block; }
+    .result.success {
+      background: #ecfdf5;
+      border: 1px solid #059669;
+      color: #047857;
+    }
+    .result.error {
+      background: #fef2f2;
+      border: 1px solid #dc2626;
+      color: #b91c1c;
+    }
+    .result.timeout {
+      background: #fffbeb;
+      border: 1px solid #d97706;
+      color: #b45309;
+    }
+    
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: #6b7280;
+    }
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 2px solid #e5e7eb;
+      border-top-color: #1e3a5f;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Refresh Button */
+    .btn-refresh {
+      background: transparent;
+      border: none;
+      color: white;
+      cursor: pointer;
+      font-size: 0.8rem;
+      opacity: 0.8;
+    }
+    .btn-refresh:hover { opacity: 1; }
+    
+    /* Hidden state */
+    .hidden { display: none !important; }
+    
+    /* Responsive */
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Valerix E-Commerce</h1>
+    <div class="status-bar">
+      <div class="status-item">
+        <span class="status-dot" id="orderServiceStatus"></span>
+        <span>Order Service</span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot" id="inventoryServiceStatus"></span>
+        <span>Inventory Service</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Left Panel: Catalog + Orders -->
+    <div class="left-panel">
+      <!-- Product Catalog -->
+      <div class="card">
+        <div class="card-header">
+          <span>Product Catalog</span>
+          <button class="btn-refresh" onclick="loadProducts()">↻ Refresh</button>
+        </div>
+        <div class="card-body">
+          <div id="productGrid" class="product-grid">
+            <div class="loading"><span class="spinner"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Orders List -->
+      <div class="card">
+        <div class="card-header">
+          <span>Recent Orders</span>
+          <button class="btn-refresh" onclick="loadOrders()">↻ Refresh</button>
+        </div>
+        <div class="card-body" style="padding: 0;">
+          <div id="ordersContainer">
+            <div class="loading"><span class="spinner"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Order Actions -->
+    <div>
+      <!-- New Order Button (shown when form is hidden) -->
+      <div id="newOrderSection" class="card">
+        <div class="card-body" style="text-align: center; padding: 2rem;">
+          <button class="btn btn-primary btn-new-order" onclick="startNewOrder()">
+            + Create New Order
+          </button>
+          
+          <!-- Gremlin Control -->
+          <div class="gremlin-section">
+            <div class="gremlin-toggle">
+              <div class="gremlin-info">
+                <strong>Chaos Mode (Gremlin)</strong>
+                <small>Delays every 3rd request by 5s</small>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="gremlinToggle" onchange="toggleGremlin()">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order Form (hidden initially) -->
+      <div id="orderFormSection" class="card hidden">
+        <div class="card-header">
+          <span>Place Order</span>
+          <button class="btn-refresh" onclick="cancelOrder()">✕ Cancel</button>
+        </div>
+        <div class="card-body">
+          <form id="orderForm" onsubmit="placeOrder(event)">
+            <div class="form-group">
+              <label>Selected Product</label>
+              <input type="text" id="selectedProduct" readonly placeholder="Click a product to select">
+              <input type="hidden" id="selectedProductId">
+            </div>
+            <div class="form-group">
+              <label>Quantity</label>
+              <input type="number" id="quantity" min="1" value="1" required>
+            </div>
+            <button type="submit" class="btn btn-primary" id="orderBtn">Place Order</button>
+          </form>
+          
+          <div id="result" class="result"></div>
+          
+          <!-- Action buttons (shown after result) -->
+          <div id="actionButtons" class="action-row hidden">
+            <button class="btn btn-warning" id="retryBtn" onclick="retryOrder()">↻ Try Again</button>
+            <button class="btn btn-secondary" onclick="startNewOrder()">+ New Order</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Configuration
+    const ORDER_SERVICE = 'http://localhost:3000';
+    const INVENTORY_SERVICE = 'http://localhost:3001';
+    
+    // State
+    let selectedProduct = null;
+    let lastOrderId = null;      // Order ID returned by backend (used for retry)
+    let lastOrderData = null;    // Product + quantity for retry
+    let canRetry = false;
+
+    // Load on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadProducts();
+      loadOrders();
+      checkHealth();
+      loadGremlinStatus();
+      setInterval(checkHealth, 10000);
+      setInterval(loadOrders, 15000);
+    });
+
+    // Start new order
+    function startNewOrder() {
+      lastOrderId = null;
+      lastOrderData = null;
+      canRetry = false;
+      
+      // Reset form
+      document.getElementById('selectedProduct').value = '';
+      document.getElementById('selectedProductId').value = '';
+      document.getElementById('quantity').value = '1';
+      document.getElementById('result').className = 'result';
+      document.getElementById('actionButtons').classList.add('hidden');
+      document.getElementById('orderBtn').classList.remove('hidden');
+      document.getElementById('orderForm').classList.remove('hidden');
+      
+      // Clear product selection
+      document.querySelectorAll('.product-card').forEach(card => {
+        card.classList.remove('selected');
+      });
+      selectedProduct = null;
+      
+      // Show form, hide button
+      document.getElementById('newOrderSection').classList.add('hidden');
+      document.getElementById('orderFormSection').classList.remove('hidden');
+    }
+
+    // Cancel order
+    function cancelOrder() {
+      document.getElementById('newOrderSection').classList.remove('hidden');
+      document.getElementById('orderFormSection').classList.add('hidden');
+      currentIdempotencyKey = null;
+    }
+
+    // Load product catalog
+    async function loadProducts() {
+      const grid = document.getElementById('productGrid');
+      grid.innerHTML = '<div class="loading"><span class="spinner"></span></div>';
+      
+      try {
+        const res = await fetch(`${INVENTORY_SERVICE}/api/inventory`);
+        const data = await res.json();
+        
+        if (data.products && data.products.length > 0) {
+          grid.innerHTML = data.products.map(p => `
+            <div class="product-card" onclick="selectProduct('${p.product_id}', '${p.name}', ${p.stock_level})">
+              <div class="product-name">${p.name}</div>
+              <div class="product-id">${p.product_id}</div>
+              <div class="product-stock ${p.stock_level < 10 ? 'low' : ''}">
+                Stock: ${p.stock_level}
+              </div>
+            </div>
+          `).join('');
+        } else {
+          grid.innerHTML = '<p style="color:#6b7280; padding:1rem;">No products found</p>';
+        }
+      } catch (err) {
+        grid.innerHTML = '<p style="color:#dc2626; padding:1rem;">Failed to load products</p>';
+      }
+    }
+
+    // Load orders
+    async function loadOrders() {
+      const container = document.getElementById('ordersContainer');
+      
+      try {
+        const res = await fetch(`${ORDER_SERVICE}/api/orders?limit=10`);
+        const data = await res.json();
+        
+        if (data.orders && data.orders.length > 0) {
+          container.innerHTML = `
+            <table class="orders-table">
+              <thead>
+                <tr>
+                  <th>Order ID</th>
+                  <th>Product</th>
+                  <th>Qty</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${data.orders.map(o => `
+                  <tr>
+                    <td style="font-family: monospace; font-size: 0.75rem;">${o.order_id.substring(0, 12)}...</td>
+                    <td>${o.product_id}</td>
+                    <td>${o.quantity}</td>
+                    <td><span class="status-badge ${o.status}">${o.status}</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        } else {
+          container.innerHTML = '<div class="no-orders">No orders yet</div>';
+        }
+      } catch (err) {
+        container.innerHTML = '<div class="no-orders" style="color:#dc2626;">Failed to load orders</div>';
+      }
+    }
+
+    // Select product
+    function selectProduct(id, name, stock) {
+      // Only allow selection if form is visible
+      if (document.getElementById('orderFormSection').classList.contains('hidden')) {
+        return;
+      }
+      
+      selectedProduct = { id, name, stock };
+      document.getElementById('selectedProduct').value = name;
+      document.getElementById('selectedProductId').value = id;
+      
+      // Highlight selected
+      document.querySelectorAll('.product-card').forEach(card => {
+        card.classList.remove('selected');
+        if (card.querySelector('.product-id').textContent === id) {
+          card.classList.add('selected');
+        }
+      });
+    }
+
+    // Place order (first attempt - no idempotency key)
+    async function placeOrder(e) {
+      e.preventDefault();
+      
+      const productId = document.getElementById('selectedProductId').value;
+      const quantity = parseInt(document.getElementById('quantity').value);
+      
+      if (!productId) {
+        showResult('Please select a product first', 'error');
+        return;
+      }
+      
+      // Save order data for potential retry
+      lastOrderData = { product_id: productId, quantity };
+      
+      // First attempt - no idempotency key
+      await submitOrder(productId, quantity, null);
+    }
+
+    // Retry order with backend-returned order_id as idempotency key
+    async function retryOrder() {
+      if (!lastOrderData || !lastOrderId) {
+        showResult('No order to retry', 'error');
+        return;
+      }
+      
+      // Use the order_id returned by backend as idempotency_key
+      await submitOrder(lastOrderData.product_id, lastOrderData.quantity, lastOrderId);
+    }
+
+    // Submit order to API
+    async function submitOrder(productId, quantity, idempotencyKey) {
+      const btn = document.getElementById('orderBtn');
+      const retryBtn = document.getElementById('retryBtn');
+      
+      btn.disabled = true;
+      btn.textContent = 'Processing...';
+      retryBtn.disabled = true;
+      
+      const startTime = Date.now();
+      
+      try {
+        // Build request body
+        const requestBody = { product_id: productId, quantity };
+        if (idempotencyKey) {
+          requestBody.idempotency_key = idempotencyKey;
+        }
+        
+        const res = await fetch(`${ORDER_SERVICE}/api/orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+        
+        const elapsed = Date.now() - startTime;
+        const data = await res.json();
+        
+        // Store order_id from backend response for potential retry
+        if (data.order_id) {
+          lastOrderId = data.order_id;
+        }
+        
+        if (data.status === 'confirmed') {
+          showResult(`✓ Order ${data.order_id.substring(0, 16)}... confirmed (${elapsed}ms)`, 'success');
+          loadProducts();
+          loadOrders();
+          canRetry = false;
+          
+          // Hide form after success, show action buttons
+          document.getElementById('orderForm').classList.add('hidden');
+          document.getElementById('actionButtons').classList.remove('hidden');
+          document.getElementById('retryBtn').classList.add('hidden');
+          
+        } else if (data.error?.code === 'INVENTORY_SERVICE_TIMEOUT') {
+          showResult(`⚠ Timeout after ${elapsed}ms. Order ID: ${data.order_id.substring(0, 12)}... Click "Try Again" to verify.`, 'timeout');
+          canRetry = true;
+          
+          // Show retry button
+          document.getElementById('orderBtn').classList.add('hidden');
+          document.getElementById('actionButtons').classList.remove('hidden');
+          document.getElementById('retryBtn').classList.remove('hidden');
+          
+        } else {
+          showResult(`✗ ${data.message || data.error?.message || 'Order failed'}`, 'error');
+          canRetry = false;
+          
+          // Show new order button only
+          document.getElementById('orderForm').classList.add('hidden');
+          document.getElementById('actionButtons').classList.remove('hidden');
+          document.getElementById('retryBtn').classList.add('hidden');
+        }
+      } catch (err) {
+        showResult(`✗ Network error: ${err.message}. ${lastOrderId ? 'Click "Try Again" to retry.' : ''}`, 'error');
+        
+        // Only allow retry if we have an order_id from a previous response
+        if (lastOrderId) {
+          canRetry = true;
+          document.getElementById('orderBtn').classList.add('hidden');
+          document.getElementById('actionButtons').classList.remove('hidden');
+          document.getElementById('retryBtn').classList.remove('hidden');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Place Order';
+        retryBtn.disabled = false;
+      }
+    }
+
+    // Show result message
+    function showResult(message, type) {
+      const el = document.getElementById('result');
+      el.textContent = message;
+      el.className = `result show ${type}`;
+    }
+
+    // Check service health
+    async function checkHealth() {
+      const orderDot = document.getElementById('orderServiceStatus');
+      const invDot = document.getElementById('inventoryServiceStatus');
+      
+      try {
+        const res = await fetch(`${ORDER_SERVICE}/health`);
+        orderDot.className = res.ok ? 'status-dot healthy' : 'status-dot unhealthy';
+      } catch {
+        orderDot.className = 'status-dot unhealthy';
+      }
+      
+      try {
+        const res = await fetch(`${INVENTORY_SERVICE}/health`);
+        invDot.className = res.ok ? 'status-dot healthy' : 'status-dot unhealthy';
+      } catch {
+        invDot.className = 'status-dot unhealthy';
+      }
+    }
+
+    // Gremlin control
+    async function loadGremlinStatus() {
+      try {
+        const res = await fetch(`${INVENTORY_SERVICE}/internal/gremlin/status`);
+        const data = await res.json();
+        document.getElementById('gremlinToggle').checked = data.enabled;
+      } catch (err) {
+        console.error('Failed to load gremlin status');
+      }
+    }
+
+    async function toggleGremlin() {
+      const enabled = document.getElementById('gremlinToggle').checked;
+      const endpoint = enabled ? 'enable' : 'disable';
+      
+      try {
+        await fetch(`${INVENTORY_SERVICE}/internal/gremlin/${endpoint}`, { method: 'POST' });
+      } catch (err) {
+        console.error('Failed to toggle gremlin');
+        document.getElementById('gremlinToggle').checked = !enabled;
+      }
+    }
+  </script>
+</body>
+</html>
