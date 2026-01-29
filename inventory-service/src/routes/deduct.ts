@@ -1,11 +1,8 @@
 import { Hono } from 'hono';
 import { sql } from '../db';
-import { gremlinLatencyMiddleware } from '../middleware/gremlin';
+import { shouldDelayRequest, getRequestCounter } from '../helpers/gremlin';
 
 const deduct = new Hono();
-
-// Apply gremlin middleware to deduct endpoint
-deduct.use('/', gremlinLatencyMiddleware);
 
 // POST /internal/inventory/deduct - Deduct inventory (idempotent)
 deduct.post('/', async (c) => {
@@ -95,6 +92,15 @@ deduct.post('/', async (c) => {
     }
 
     const op = result[0];
+    
+    // Apply gremlin delay AFTER database commit but BEFORE response
+    // This simulates network delay without affecting data integrity
+    if (shouldDelayRequest()) {
+      const counter = getRequestCounter();
+      console.log(`[GREMLIN] Delaying response for request #${counter} by 5 seconds (DB already committed)`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+    
     return c.json({
       order_id: op.order_id,
       product_id: op.product_id,

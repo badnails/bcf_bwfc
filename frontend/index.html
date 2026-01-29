@@ -311,6 +311,14 @@
       border: 1px solid #d97706;
       color: #b45309;
     }
+    .result.pending {
+      background: #eff6ff;
+      border: 1px solid #3b82f6;
+      color: #1e40af;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
     
     /* Loading */
     .loading {
@@ -593,7 +601,7 @@
       });
     }
 
-    // Place order (first attempt - no idempotency key)
+    // Place order with client-generated UUID for idempotency
     async function placeOrder(e) {
       e.preventDefault();
       
@@ -605,26 +613,30 @@
         return;
       }
       
+      // Generate client-side UUID for idempotency BEFORE making request
+      const clientOrderId = `ORD-${crypto.randomUUID()}`;
+      
       // Save order data for potential retry
       lastOrderData = { product_id: productId, quantity };
+      lastOrderId = clientOrderId; // Store generated ID for retries
       
-      // First attempt - no idempotency key
-      await submitOrder(productId, quantity, null);
+      // Submit with client-generated order ID
+      await submitOrder(productId, quantity, clientOrderId);
     }
 
-    // Retry order with backend-returned order_id as idempotency key
+    // Retry order with same client-generated order_id
     async function retryOrder() {
       if (!lastOrderData || !lastOrderId) {
         showResult('No order to retry', 'error');
         return;
       }
       
-      // Use the order_id returned by backend as idempotency_key
+      // Retry with the SAME client-generated order_id (idempotent)
       await submitOrder(lastOrderData.product_id, lastOrderData.quantity, lastOrderId);
     }
 
     // Submit order to API
-    async function submitOrder(productId, quantity, idempotencyKey) {
+    async function submitOrder(productId, quantity, orderId) {
       const btn = document.getElementById('orderBtn');
       const retryBtn = document.getElementById('retryBtn');
       
@@ -635,11 +647,12 @@
       const startTime = Date.now();
       
       try {
-        // Build request body
-        const requestBody = { product_id: productId, quantity };
-        if (idempotencyKey) {
-          requestBody.idempotency_key = idempotencyKey;
-        }
+        // Build request body with client-provided order_id (required)
+        const requestBody = { 
+          product_id: productId, 
+          quantity,
+          order_id: orderId  // Client-generated UUID
+        };
         
         const res = await fetch(`${ORDER_SERVICE}/api/orders`, {
           method: 'POST',
@@ -650,15 +663,17 @@
         const elapsed = Date.now() - startTime;
         const data = await res.json();
         
-        // Store order_id from backend response for potential retry
-        if (data.order_id) {
-          lastOrderId = data.order_id;
-        }
+        // order_id is already set (client-generated), no need to save from response
         
         if (data.status === 'confirmed') {
           showResult(`✓ Order ${data.order_id.substring(0, 16)}... confirmed (${elapsed}ms)`, 'success');
-          loadProducts();
-          loadOrders();
+          
+          // Reload with small delay to ensure inventory DB has updated
+          setTimeout(() => {
+            loadProducts();
+            loadOrders();
+          }, 300);
+          
           canRetry = false;
           
           // Hide form after success, show action buttons
@@ -667,13 +682,27 @@
           document.getElementById('retryBtn').classList.add('hidden');
           
         } else if (data.error?.code === 'INVENTORY_SERVICE_TIMEOUT') {
-          showResult(`⚠ Timeout after ${elapsed}ms. Order ID: ${data.order_id.substring(0, 12)}... Click "Try Again" to verify.`, 'timeout');
+          // Order is undecided - show pending state and subscribe to SSE for real-time updates
+          showResult(`<span class="spinner"></span> Verifying order in background...`, 'pending');
           canRetry = true;
           
-          // Show retry button
+          // Hide buttons while waiting for SSE update
           document.getElementById('orderBtn').classList.add('hidden');
-          document.getElementById('actionButtons').classList.remove('hidden');
-          document.getElementById('retryBtn').classList.remove('hidden');
+          document.getElementById('actionButtons').classList.add('hidden');
+          
+          // Subscribe to Server-Sent Events for real-time status updates
+          subscribeToOrderStatus(data.order_id);
+          
+        } else if (data.status === 'undecided') {
+          // Undecided status (from retry with idempotency key)
+          showResult(`<span class="spinner"></span> Verifying order in background...`, 'pending');
+          
+          // Hide buttons while waiting for SSE update
+          document.getElementById('orderBtn').classList.add('hidden');
+          document.getElementById('actionButtons').classList.add('hidden');
+          
+          // Subscribe to Server-Sent Events for real-time status updates
+          subscribeToOrderStatus(data.order_id);
           
         } else {
           showResult(`✗ ${data.message || data.error?.message || 'Order failed'}`, 'error');
@@ -704,8 +733,97 @@
     // Show result message
     function showResult(message, type) {
       const el = document.getElementById('result');
-      el.textContent = message;
+      el.innerHTML = message; // Use innerHTML to support spinner
       el.className = `result show ${type}`;
+    }
+
+    // Subscribe to order status updates via Server-Sent Events
+    let currentEventSource = null;
+
+    function subscribeToOrderStatus(orderId) {
+      // Close any existing connection
+      if (currentEventSource) {
+        currentEventSource.close();
+      }
+
+      console.log(`📡 Subscribing to status updates for order ${orderId}`);
+
+      const eventSource = new EventSource(`${ORDER_SERVICE}/api/orders/${orderId}/events`);
+      currentEventSource = eventSource;
+
+      eventSource.addEventListener('connected', (e) => {
+        console.log('✅ SSE connection established');
+      });
+
+      eventSource.addEventListener('status_update', (e) => {
+        const update = JSON.parse(e.data);
+        console.log('📬 Received status update:', update);
+
+        if (update.status === 'confirmed') {
+          showResult(`✓ Order confirmed! (auto-resolved by worker)`, 'success');
+          
+          // Reload orders and inventory (with small delay to ensure DB propagation)
+          setTimeout(() => {
+            loadProducts();
+            loadOrders();
+          }, 500);
+          
+          // Show new order button
+          document.getElementById('orderForm').classList.add('hidden');
+          document.getElementById('actionButtons').classList.remove('hidden');
+          document.getElementById('retryBtn').classList.add('hidden');
+          
+          eventSource.close();
+          currentEventSource = null;
+          
+        } else if (update.status === 'failed') {
+          showResult(`✗ Order failed: ${update.error_message || 'Unknown error'}`, 'error');
+          
+          // Show new order button
+          document.getElementById('orderForm').classList.add('hidden');
+          document.getElementById('actionButtons').classList.remove('hidden');
+          document.getElementById('retryBtn').classList.add('hidden');
+          
+          eventSource.close();
+          currentEventSource = null;
+        }
+      });
+
+      eventSource.addEventListener('heartbeat', () => {
+        // Keep-alive heartbeat - no action needed
+      });
+
+      eventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        
+        // Don't immediately show error - the connection might reconnect
+        // Only show error after a delay if still not resolved
+        setTimeout(() => {
+          if (currentEventSource === eventSource && eventSource.readyState !== EventSource.OPEN) {
+            // Show fallback UI with retry button
+            showResult(`⚠ Connection lost. Click "Try Again" to check status.`, 'timeout');
+            document.getElementById('actionButtons').classList.remove('hidden');
+            document.getElementById('retryBtn').classList.remove('hidden');
+            
+            eventSource.close();
+            currentEventSource = null;
+          }
+        }, 3000); // Wait 3 seconds before showing error
+      };
+
+      // Timeout after 2 minutes if no update received
+      setTimeout(() => {
+        if (currentEventSource === eventSource) {
+          console.log('⏱️ SSE timeout - no update received');
+          eventSource.close();
+          currentEventSource = null;
+          
+          // Show fallback UI
+          showResult(`⚠ Still processing. Click "Try Again" to check status.`, 'timeout');
+          document.getElementById('actionButtons').classList.remove('hidden');
+          document.getElementById('retryBtn').classList.remove('hidden');
+        }
+      }, 120000); // 2 minutes
     }
 
     // Check service health

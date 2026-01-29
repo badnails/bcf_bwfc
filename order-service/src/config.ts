@@ -13,4 +13,12 @@ export const config = {
     serviceUrl: process.env.INVENTORY_SERVICE_URL || 'http://localhost:3001',
     timeoutMs: parseInt(process.env.INVENTORY_TIMEOUT_MS || '3000'),
   },
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+  },
+  worker: {
+    maxRetryAttempts: parseInt(process.env.WORKER_MAX_RETRY_ATTEMPTS || '5'),
+    initialRetryDelayMs: parseInt(process.env.WORKER_INITIAL_RETRY_DELAY_MS || '5000'),
+  },
 };

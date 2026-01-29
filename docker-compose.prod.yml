@@ -55,6 +55,28 @@ services:
           cpus: '0.5'
           memory: 256M
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis-prod
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - valerix-prod-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
   order-service:
     build:
       context: ./order-service
@@ -71,11 +93,15 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       INVENTORY_SERVICE_URL: http://inventory-service:3001
       INVENTORY_TIMEOUT_MS: 3000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       LOG_LEVEL: info
     ports:
       - "3000:3000"
     depends_on:
       order-db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       inventory-service:
         condition: service_started

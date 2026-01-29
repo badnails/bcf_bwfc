@@ -39,6 +39,20 @@ services:
     networks:
       - valerix-network
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - valerix-network
+    restart: unless-stopped
+
   order-service:
     build:
       context: ./order-service
@@ -53,10 +67,14 @@ services:
       DB_PASSWORD: postgres
       INVENTORY_SERVICE_URL: http://inventory-service:3001
       INVENTORY_TIMEOUT_MS: 3000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     ports:
       - "3000:3000"
     depends_on:
       order-db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       inventory-service:
         condition: service_started

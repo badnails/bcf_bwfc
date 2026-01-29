@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { sql } from '../db';
-import { generateOrderId } from '../helpers/order-helpers';
 import { callInventoryDeduct, verifyInventoryDeduction } from '../helpers/inventory-client';
+import { publishRetryEvent } from '../helpers/retry-events';
+import { config } from '../config';
 
 const orders = new Hono();
 
@@ -9,7 +10,7 @@ const orders = new Hono();
 orders.post('/', async (c) => {
   try {
     const body = await c.req.json();
-    const { product_id, quantity, idempotency_key } = body;
+    const { product_id, quantity, order_id } = body;
 
     const requestId = c.req.header('X-Request-ID') || crypto.randomUUID();
     const correlationId = c.req.header('X-Correlation-ID') || crypto.randomUUID();
@@ -19,14 +20,19 @@ orders.post('/', async (c) => {
       return c.json({ error: { code: 'BAD_REQUEST', message: 'Invalid input' } }, 400);
     }
 
-    // If idempotency key provided, check if order exists
-    if (idempotency_key) {
-      const existingOrder = await sql`
-        SELECT * FROM orders WHERE order_id = ${idempotency_key}
-      `;
+    // Require client-provided order_id for idempotency
+    if (!order_id || typeof order_id !== 'string' || order_id.trim().length === 0) {
+      return c.json({ error: { code: 'BAD_REQUEST', message: 'order_id is required (client must provide UUID)' } }, 400);
+    }
 
-      if (existingOrder.length > 0) {
-        const order = existingOrder[0];
+    // Check if order with this client-provided ID already exists (idempotency)
+    const existingOrder = await sql`
+      SELECT * FROM orders WHERE order_id = ${order_id}
+    `;
+
+    if (existingOrder.length > 0) {
+
+      const order = existingOrder[0];
         
         // If status is undecided, verify with inventory service
         if (order.status === 'undecided') {
@@ -86,14 +92,10 @@ orders.post('/', async (c) => {
           message: order.status === 'confirmed' ? 'Order placed and fulfilled' : order.error_message,
           timestamp: order.created_at,
         });
-      }
     }
 
-    // Generate new order ID
-    const orderId = generateOrderId();
-
-    // Call inventory service to deduct stock
-    const inventoryResult = await callInventoryDeduct(orderId, product_id, quantity, {
+    // Call inventory service to deduct stock (using client-provided order_id)
+    const inventoryResult = await callInventoryDeduct(order_id, product_id, quantity, {
       'x-request-id': requestId,
       'x-correlation-id': correlationId,
     });
@@ -102,11 +104,11 @@ orders.post('/', async (c) => {
       // Order confirmed - save to database
       await sql`
         INSERT INTO orders (order_id, product_id, quantity, status, request_id, correlation_id)
-        VALUES (${orderId}, ${product_id}, ${quantity}, 'confirmed', ${requestId}, ${correlationId})
+        VALUES (${order_id}, ${product_id}, ${quantity}, 'confirmed', ${requestId}, ${correlationId})
       `;
 
       return c.json({
-        order_id: orderId,
+        order_id: order_id,
         status: 'confirmed',
         product_id,
         quantity,
@@ -121,11 +123,20 @@ orders.post('/', async (c) => {
         
         await sql`
           INSERT INTO orders (order_id, product_id, quantity, status, error_message, request_id, correlation_id)
-          VALUES (${orderId}, ${product_id}, ${quantity}, 'undecided', ${errorMessage}, ${requestId}, ${correlationId})
+          VALUES (${order_id}, ${product_id}, ${quantity}, 'undecided', ${errorMessage}, ${requestId}, ${correlationId})
         `;
 
+        // Publish retry event for automatic resolution
+        await publishRetryEvent({
+          order_id: order_id,
+          product_id: product_id,
+          quantity: quantity,
+          attempt: 0,
+          max_attempts: config.worker.maxRetryAttempts,
+        });
+
         return c.json({
-          order_id: orderId,
+          order_id: order_id,
           status: 'undecided',
           error: {
             code: 'INVENTORY_SERVICE_TIMEOUT',
