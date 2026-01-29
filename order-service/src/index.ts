@@ -4,11 +4,32 @@ import { config } from './config';
 import orders from './routes/orders';
 import stats from './routes/stats';
 import health from './routes/health';
-import { initMetrics } from '../../shared/metrics';
+import { initMetrics, registerHealthCheck, updateDependencyHealth } from '../../shared/metrics';
 import { metricsMiddleware, createMetricsHandler, createSlaStatusHandler } from '../../shared/metrics-middleware';
+import { sql } from './db';
+import { checkInventoryHealth } from './helpers/inventory-client';
 
 // Initialize metrics for this service
 initMetrics('order-service');
+
+// Register health checks to run on each /metrics scrape
+registerHealthCheck(async () => {
+  // Check database
+  try {
+    await sql`SELECT 1`;
+    updateDependencyHealth('database', true);
+  } catch {
+    updateDependencyHealth('database', false);
+  }
+  
+  // Check inventory service
+  try {
+    const healthy = await checkInventoryHealth();
+    updateDependencyHealth('inventory_service', healthy);
+  } catch {
+    updateDependencyHealth('inventory_service', false);
+  }
+});
 
 const app = new Hono();
 

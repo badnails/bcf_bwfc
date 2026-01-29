@@ -13,7 +13,8 @@ import {
   recordHttpRequest, 
   incActiveRequests, 
   decActiveRequests,
-  getMetrics 
+  getMetrics,
+  runHealthChecks
 } from './metrics';
 
 export async function metricsMiddleware(c: Context, next: Next): Promise<void> {
@@ -59,9 +60,13 @@ export async function metricsMiddleware(c: Context, next: Next): Promise<void> {
 
 /**
  * Creates a metrics endpoint handler
+ * Runs health checks before each scrape to ensure fresh dependency status
  */
 export function createMetricsHandler() {
-  return (c: Context) => {
+  return async (c: Context) => {
+    // Run health checks before returning metrics (ensures fresh dependency status)
+    await runHealthChecks();
+    
     const metrics = getMetrics();
     c.header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
     return c.text(metrics.toPrometheusFormat());

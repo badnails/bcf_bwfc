@@ -6,11 +6,22 @@ import deduct from './routes/deduct';
 import admin from './routes/admin';
 import gremlin from './routes/gremlin';
 import health from './routes/health';
-import { initMetrics } from '../../shared/metrics';
+import { initMetrics, registerHealthCheck, updateDependencyHealth } from '../../shared/metrics';
 import { metricsMiddleware, createMetricsHandler, createSlaStatusHandler } from '../../shared/metrics-middleware';
+import { sql } from './db';
 
 // Initialize metrics for this service
 initMetrics('inventory-service');
+
+// Register health checks to run on each /metrics scrape
+registerHealthCheck(async () => {
+  try {
+    await sql`SELECT 1`;
+    updateDependencyHealth('database', true);
+  } catch {
+    updateDependencyHealth('database', false);
+  }
+});
 
 const app = new Hono();
 

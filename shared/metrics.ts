@@ -219,6 +219,18 @@ class MetricsRegistry {
     lines.push(`# TYPE sla_status_ok gauge`);
     lines.push(`sla_status_ok{service="${service}"} ${this.getResponseTimeStatus() === 'green' ? 1 : 0}`);
 
+    // Add dependency health gauges
+    lines.push(`# HELP service_dependency_health Health status of service dependencies (1 = healthy, 0 = unhealthy)`);
+    lines.push(`# TYPE service_dependency_health gauge`);
+    for (const [name, metrics] of this.gauges) {
+      if (name === 'service_dependency_health') {
+        for (const metric of metrics) {
+          const labelStr = this.formatLabels({ ...metric.labels, service });
+          lines.push(`${name}${labelStr} ${metric.value}`);
+        }
+      }
+    }
+
     return lines.join('\n');
   }
 
@@ -257,6 +269,25 @@ class MetricsRegistry {
 // ============================================================================
 
 let metricsInstance: MetricsRegistry | null = null;
+
+// Health check functions registry
+type HealthCheckFn = () => Promise<void>;
+const healthChecks: HealthCheckFn[] = [];
+
+/**
+ * Register a health check function that runs before each /metrics scrape
+ * The function should call updateDependencyHealth() for each dependency it checks
+ */
+export function registerHealthCheck(fn: HealthCheckFn): void {
+  healthChecks.push(fn);
+}
+
+/**
+ * Run all registered health checks (called before each metrics scrape)
+ */
+export async function runHealthChecks(): Promise<void> {
+  await Promise.all(healthChecks.map(fn => fn().catch(() => {})));
+}
 
 export function initMetrics(serviceName: string): MetricsRegistry {
   metricsInstance = new MetricsRegistry(serviceName);
@@ -322,6 +353,16 @@ export function incActiveRequests(): void {
 export function decActiveRequests(): void {
   const metrics = getMetrics();
   metrics.decGauge('http_requests_in_flight', {});
+}
+
+/**
+ * Update dependency health status for monitoring
+ * @param dependency - Name of the dependency (e.g., 'database', 'inventory_service')
+ * @param isHealthy - Whether the dependency is healthy
+ */
+export function updateDependencyHealth(dependency: string, isHealthy: boolean): void {
+  const metrics = getMetrics();
+  metrics.setGauge('service_dependency_health', { dependency }, isHealthy ? 1 : 0);
 }
 
 export { MetricsRegistry };
