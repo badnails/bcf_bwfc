@@ -6,6 +6,8 @@ This project implements a microservices architecture for an e-commerce platform 
 
 - **Order Service** (port 3000) - Handles order placement and management
 - **Inventory Service** (port 3001) - Manages product stock and inventory operations
+- **Backup Service** (port 3002) - Automated database backups with local caching
+- **Mock Backup Service** (port 3003) - Simulates external backup API (1 upload/day limit)
 - **PostgreSQL Databases** - Separate databases for each service
 
 ## Quick Start
@@ -28,6 +30,12 @@ curl http://localhost:3000/health
 
 # Inventory Service
 curl http://localhost:3001/health
+
+# Backup Service
+curl http://localhost:3002/health
+
+# Mock Backup Service
+curl http://localhost:3003/health
 ```
 
 3. View logs:
@@ -172,9 +180,38 @@ curl -X POST http://localhost:3000/api/orders \
 - Automatic retry support via idempotency
 
 ### Health Checks
-- Both services expose `/health` endpoints
+- All services expose `/health` endpoints
 - Dependency checks (database, downstream services)
 - Returns degraded status when dependencies fail
+
+### Backup System ("The Need to Leave a Trail Behind")
+Solves the challenge of backing up data when external service only allows 1 call/day:
+
+**Strategy: Black Box Pattern**
+1. **Every 5 minutes**: Incremental SQL dumps saved to local volume
+2. **Daily at 00:00 UTC**: Consolidate dumps into single archive
+3. **Single upload**: Send consolidated backup to external service
+
+**Endpoints:**
+```bash
+# Manual dump
+curl -X POST http://localhost:3002/api/backup/trigger-dump
+
+# Manual upload (bypass rate limit for demo)
+curl -X POST http://localhost:3002/api/backup/trigger-upload -H "X-Bypass-Rate-Limit: true"
+
+# Check status
+curl http://localhost:3002/api/backup/status
+
+# List uploaded backups
+curl http://localhost:3003/api/backup/list
+```
+
+**Benefits:**
+- Multiple local backups without hitting API limit
+- Single daily upload respects 1/day restriction
+- Data preserved even if external service is down
+- Full audit trail of all database changes
 
 ## Sample Products
 
@@ -222,6 +259,23 @@ curl "http://localhost:3001/internal/inventory/audit?product_id=PROD-001"
      │                           │          └─► Inventory DB
      └─► Inventory Service ──────┘
              (public endpoints)
+
+     Backup Layer:
+     ┌─────────────────────────────────────────────────────┐
+     │                                                     │
+     │  ┌────────────┐    ┌─────────────────────────────┐  │
+     │  │ Order DB   │◄───│                             │  │
+     │  └────────────┘    │    Backup Service (3002)    │  │
+     │  ┌────────────┐    │    - 5min local dumps       │  │
+     │  │Inventory DB│◄───│    - Daily consolidation    │  │
+     │  └────────────┘    │    - Upload to external     │  │
+     │                    └──────────────┬──────────────┘  │
+     │                                   │                 │
+     │                    ┌──────────────▼──────────────┐  │
+     │                    │ Mock Backup Service (3003)  │  │
+     │                    │ (1 upload/day rate limit)   │  │
+     │                    └─────────────────────────────┘  │
+     └─────────────────────────────────────────────────────┘
 ```
 
 ## Troubleshooting

@@ -103,6 +103,57 @@ services:
       - valerix-network
     restart: unless-stopped
 
+  backup-service:
+    build:
+      context: ./backup-service
+      dockerfile: Dockerfile
+    container_name: backup-service
+    environment:
+      PORT: 3002
+      ORDER_DB_HOST: order-db
+      ORDER_DB_PORT: 5432
+      ORDER_DB_NAME: order_db
+      ORDER_DB_USER: postgres
+      ORDER_DB_PASSWORD: postgres
+      INVENTORY_DB_HOST: inventory-db
+      INVENTORY_DB_PORT: 5432
+      INVENTORY_DB_NAME: inventory_db
+      INVENTORY_DB_USER: postgres
+      INVENTORY_DB_PASSWORD: postgres
+      MOCK_BACKUP_URL: http://mock-backup-service:3003
+      DUMP_INTERVAL_MS: 300000
+      UPLOAD_HOUR_UTC: 0
+    ports:
+      - "3002:3002"
+    volumes:
+      - backup-dumps:/dumps
+    depends_on:
+      order-db:
+        condition: service_healthy
+      inventory-db:
+        condition: service_healthy
+      mock-backup-service:
+        condition: service_started
+    networks:
+      - valerix-network
+    restart: unless-stopped
+
+  mock-backup-service:
+    build:
+      context: ./mock-backup-service
+      dockerfile: Dockerfile
+    container_name: mock-backup-service
+    environment:
+      PORT: 3003
+      BACKUP_DIR: /backups
+    ports:
+      - "3003:3003"
+    volumes:
+      - backup-uploads:/backups
+    networks:
+      - valerix-network
+    restart: unless-stopped
+
 networks:
   valerix-network:
     driver: bridge
@@ -110,3 +161,5 @@ networks:
 volumes:
   order-db-data:
   inventory-db-data:
+  backup-dumps:
+  backup-uploads:

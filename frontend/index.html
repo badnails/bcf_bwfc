@@ -357,6 +357,166 @@
         grid-template-columns: 1fr;
       }
     }
+    
+    /* Backup Section */
+    .backup-section {
+      margin-top: 1.5rem;
+    }
+    .backup-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem;
+      margin-bottom: 1rem;
+    }
+    .backup-stat {
+      background: #f9fafb;
+      padding: 0.8rem;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .backup-stat-value {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #1e3a5f;
+    }
+    .backup-stat-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 0.2rem;
+    }
+    .backup-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .backup-actions .btn {
+      flex: 1;
+      font-size: 0.8rem;
+      padding: 0.5rem;
+    }
+    .backup-list {
+      max-height: 150px;
+      overflow-y: auto;
+      margin-top: 0.8rem;
+    }
+    .backup-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 0.75rem;
+    }
+    .backup-item:last-child { border-bottom: none; }
+    .backup-filename {
+      color: #374151;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .backup-size { color: #6b7280; }
+    
+    /* Dump Viewer Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal {
+      background: white;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 900px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      background: #1e3a5f;
+      color: white;
+      padding: 1rem;
+      border-radius: 8px 8px 0 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h3 { font-size: 1rem; }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 1.5rem;
+      cursor: pointer;
+      opacity: 0.8;
+    }
+    .modal-close:hover { opacity: 1; }
+    .modal-body {
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .dump-list-section {
+      padding: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f9fafb;
+    }
+    .dump-file-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .dump-file-btn {
+      padding: 0.4rem 0.8rem;
+      background: white;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .dump-file-btn:hover {
+      border-color: #1e3a5f;
+      background: #f0f5ff;
+    }
+    .dump-file-btn.active {
+      background: #1e3a5f;
+      color: white;
+      border-color: #1e3a5f;
+    }
+    .dump-content-section {
+      flex: 1;
+      padding: 1rem;
+      overflow: auto;
+    }
+    .dump-content {
+      background: #1a1a2e;
+      color: #22c55e;
+      padding: 1rem;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 400px;
+      overflow: auto;
+    }
+    .dump-empty {
+      text-align: center;
+      padding: 2rem;
+      color: #6b7280;
+    }
+    .dump-meta {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-bottom: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -365,11 +525,15 @@
     <div class="status-bar">
       <div class="status-item">
         <span class="status-dot" id="orderServiceStatus"></span>
-        <span>Order Service</span>
+        <span>Order</span>
       </div>
       <div class="status-item">
         <span class="status-dot" id="inventoryServiceStatus"></span>
-        <span>Inventory Service</span>
+        <span>Inventory</span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot" id="backupServiceStatus"></span>
+        <span>Backup</span>
       </div>
     </div>
   </header>
@@ -426,6 +590,32 @@
               </label>
             </div>
           </div>
+          
+          <!-- Backup Status -->
+          <div class="gremlin-section backup-section">
+            <div class="gremlin-info" style="margin-bottom: 0.8rem;">
+              <strong>Backup Service</strong>
+              <small>Local dumps every 5 min, daily upload</small>
+            </div>
+            <div class="backup-stats">
+              <div class="backup-stat">
+                <div class="backup-stat-value" id="pendingDumps">-</div>
+                <div class="backup-stat-label">Pending Dumps</div>
+              </div>
+              <div class="backup-stat">
+                <div class="backup-stat-value" id="remoteBackups">-</div>
+                <div class="backup-stat-label">Uploaded</div>
+              </div>
+            </div>
+            <div class="backup-actions">
+              <button class="btn btn-secondary" onclick="triggerDump()">Dump Now</button>
+              <button class="btn btn-primary" onclick="triggerUpload()">Upload Now</button>
+            </div>
+            <div class="backup-actions" style="margin-top: 0.5rem;">
+              <button class="btn btn-secondary" onclick="openDumpViewer()" style="background: #e0e7ff; border-color: #6366f1; color: #4338ca;">📄 View Dump Contents</button>
+            </div>
+            <div id="backupList" class="backup-list"></div>
+          </div>
         </div>
       </div>
 
@@ -461,10 +651,33 @@
     </div>
   </main>
 
+  <!-- Dump Viewer Modal -->
+  <div id="dumpModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>📄 Backup Dump Contents</h3>
+        <button class="modal-close" onclick="closeDumpViewer()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="dump-list-section">
+          <div id="dumpFileList" class="dump-file-list">
+            <span style="color:#6b7280">Loading...</span>
+          </div>
+        </div>
+        <div class="dump-content-section">
+          <div id="dumpMeta" class="dump-meta"></div>
+          <div id="dumpContent" class="dump-empty">Select a dump file above to view its contents</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Configuration
     const ORDER_SERVICE = 'http://localhost:3000';
     const INVENTORY_SERVICE = 'http://localhost:3001';
+    const BACKUP_SERVICE = 'http://localhost:3002';
+    const MOCK_BACKUP_SERVICE = 'http://localhost:3003';
     
     // State
     let selectedProduct = null;
@@ -478,8 +691,10 @@
       loadOrders();
       checkHealth();
       loadGremlinStatus();
+      loadBackupStatus();
       setInterval(checkHealth, 10000);
       setInterval(loadOrders, 15000);
+      setInterval(loadBackupStatus, 30000);
     });
 
     // Start new order
@@ -830,6 +1045,7 @@
     async function checkHealth() {
       const orderDot = document.getElementById('orderServiceStatus');
       const invDot = document.getElementById('inventoryServiceStatus');
+      const backupDot = document.getElementById('backupServiceStatus');
       
       try {
         const res = await fetch(`${ORDER_SERVICE}/health`);
@@ -843,6 +1059,13 @@
         invDot.className = res.ok ? 'status-dot healthy' : 'status-dot unhealthy';
       } catch {
         invDot.className = 'status-dot unhealthy';
+      }
+      
+      try {
+        const res = await fetch(`${BACKUP_SERVICE}/health`);
+        backupDot.className = res.ok ? 'status-dot healthy' : 'status-dot unhealthy';
+      } catch {
+        backupDot.className = 'status-dot unhealthy';
       }
     }
 
@@ -866,6 +1089,152 @@
       } catch (err) {
         console.error('Failed to toggle gremlin');
         document.getElementById('gremlinToggle').checked = !enabled;
+      }
+    }
+
+    // Backup functions
+    async function loadBackupStatus() {
+      try {
+        // Get backup service status
+        const statusRes = await fetch(`${BACKUP_SERVICE}/api/backup/status`);
+        const status = await statusRes.json();
+        
+        document.getElementById('pendingDumps').textContent = status.localDumps?.pendingIncrementals || 0;
+        
+        // Get remote backups list
+        const remoteRes = await fetch(`${MOCK_BACKUP_SERVICE}/api/backup/list`);
+        const remote = await remoteRes.json();
+        
+        document.getElementById('remoteBackups').textContent = remote.total_count || 0;
+        
+        // Show backup list
+        const listEl = document.getElementById('backupList');
+        if (remote.backups && remote.backups.length > 0) {
+          listEl.innerHTML = remote.backups.slice(0, 5).map(b => `
+            <div class="backup-item">
+              <span class="backup-filename" title="${b.filename}">${b.filename.substring(0, 25)}...</span>
+              <span class="backup-size">${b.size_readable}</span>
+            </div>
+          `).join('');
+        } else {
+          listEl.innerHTML = '<div class="backup-item"><span style="color:#6b7280">No backups yet</span></div>';
+        }
+      } catch (err) {
+        console.error('Failed to load backup status:', err);
+      }
+    }
+
+    async function triggerDump() {
+      try {
+        const res = await fetch(`${BACKUP_SERVICE}/api/backup/trigger-dump`, { method: 'POST' });
+        const data = await res.json();
+        
+        if (data.success) {
+          alert('Dump created successfully!');
+          loadBackupStatus();
+        } else {
+          alert('Dump failed: ' + (data.error || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Failed to trigger dump: ' + err.message);
+      }
+    }
+
+    async function triggerUpload() {
+      try {
+        const res = await fetch(`${BACKUP_SERVICE}/api/backup/trigger-upload`, {
+          method: 'POST',
+          headers: { 'X-Bypass-Rate-Limit': 'true' }
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          alert('Backup uploaded successfully!');
+          loadBackupStatus();
+        } else if (data.rateLimited) {
+          alert('Rate limited! Only 1 upload per 24 hours allowed.');
+        } else {
+          alert('Upload failed: ' + (data.message || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Failed to trigger upload: ' + err.message);
+      }
+    }
+
+    // Dump Viewer functions
+    let currentDumpFiles = [];
+    
+    async function openDumpViewer() {
+      document.getElementById('dumpModal').classList.remove('hidden');
+      await loadDumpFiles();
+    }
+    
+    function closeDumpViewer() {
+      document.getElementById('dumpModal').classList.add('hidden');
+    }
+    
+    async function loadDumpFiles() {
+      const listEl = document.getElementById('dumpFileList');
+      listEl.innerHTML = '<span style="color:#6b7280">Loading...</span>';
+      
+      try {
+        const res = await fetch(`${BACKUP_SERVICE}/api/backup/dumps`);
+        const data = await res.json();
+        currentDumpFiles = data.dumps || [];
+        
+        if (currentDumpFiles.length === 0) {
+          listEl.innerHTML = '<span style="color:#6b7280">No dump files yet. Click "Dump Now" to create one.</span>';
+          return;
+        }
+        
+        listEl.innerHTML = currentDumpFiles.map((d, idx) => `
+          <button class="dump-file-btn" onclick="viewDump('${d.filename}', this)">
+            ${d.filename.substring(0, 20)}... (${d.size_readable})
+          </button>
+        `).join('');
+        
+        // Auto-select first dump
+        const firstBtn = listEl.querySelector('.dump-file-btn');
+        if (firstBtn) {
+          viewDump(currentDumpFiles[0].filename, firstBtn);
+        }
+      } catch (err) {
+        listEl.innerHTML = '<span style="color:#dc2626">Failed to load dumps</span>';
+      }
+    }
+    
+    async function viewDump(filename, btnElement) {
+      // Update active state
+      document.querySelectorAll('.dump-file-btn').forEach(btn => btn.classList.remove('active'));
+      if (btnElement) btnElement.classList.add('active');
+      
+      const contentEl = document.getElementById('dumpContent');
+      const metaEl = document.getElementById('dumpMeta');
+      
+      contentEl.className = 'dump-empty';
+      contentEl.textContent = 'Loading...';
+      metaEl.textContent = '';
+      
+      try {
+        const res = await fetch(`${BACKUP_SERVICE}/api/backup/dumps/${encodeURIComponent(filename)}`);
+        const data = await res.json();
+        
+        if (data.error) {
+          contentEl.textContent = 'Error: ' + data.error;
+          return;
+        }
+        
+        metaEl.innerHTML = `<strong>${data.filename}</strong> | ${data.size_readable} | Created: ${new Date(data.created).toLocaleString()}`;
+        
+        if (data.content.trim()) {
+          contentEl.className = 'dump-content';
+          contentEl.textContent = data.content;
+        } else {
+          contentEl.className = 'dump-empty';
+          contentEl.textContent = 'This dump file is empty (no new records since last backup).';
+        }
+      } catch (err) {
+        contentEl.textContent = 'Failed to load dump: ' + err.message;
       }
     }
   </script>
